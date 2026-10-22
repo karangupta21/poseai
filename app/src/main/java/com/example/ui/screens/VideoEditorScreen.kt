@@ -535,7 +535,7 @@ fun VideoEditorScreen(
             }
         }
 
-        // Success dialog
+        // Export status dialog
         if (uiState.exportSuccessMessage != null) {
             Dialog(onDismissRequest = onDismissExportMessage) {
                 GlassCard(
@@ -557,7 +557,7 @@ fun VideoEditorScreen(
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = EmeraldGlow, modifier = Modifier.size(28.dp))
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "EXPORT READY!", fontSize = 16.sp, fontWeight = FontWeight.Black, color = EmeraldGlow)
+                        Text(text = "EXPORT NOT AVAILABLE", fontSize = 16.sp, fontWeight = FontWeight.Black, color = EmeraldGlow)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = uiState.exportSuccessMessage ?: "",
@@ -567,7 +567,7 @@ fun VideoEditorScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         GradientButton(
-                            text = "Download MP4",
+                            text = "Close",
                             onClick = onDismissExportMessage,
                             modifier = Modifier.fillMaxWidth(),
                             icon = Icons.Default.Download
