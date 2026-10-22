@@ -256,7 +256,7 @@ class GeminiService {
 
     private fun callGeminiMultimodal(prompt: String, base64Image: String): String {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
 
         val requestJson = JSONObject().apply {
             val contents = JSONArray().apply {
@@ -278,11 +278,16 @@ class GeminiService {
         }
 
         val requestBody = requestJson.toString().toRequestBody(jsonMediaType)
-        val request = Request.Builder().url(url).post(requestBody).build()
+        val request = Request.Builder().url(url).header("x-goog-api-key", apiKey).post(requestBody).build()
 
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw RuntimeException("Empty response")
-        return extractTextFromResponse(responseBody)
+        okHttpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string()
+                ?: throw IOException("Gemini returned an empty response body")
+            if (!response.isSuccessful) {
+                throw IOException("Gemini request failed with HTTP ${response.code}")
+            }
+            return extractTextFromResponse(responseBody)
+        }
     }
 
     private fun extractTextFromResponse(responseBody: String): String {
