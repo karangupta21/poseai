@@ -1,8 +1,5 @@
 package com.example.ui.screens
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -81,18 +78,10 @@ fun CameraCoachScreen(
     onUsePoseForVideo: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var hasCameraPermission by remember { mutableStateOf(false) }
     var showGridLines by remember { mutableStateOf(true) }
     var showWireframe by remember { mutableStateOf(true) }
     var wireframeAlpha by remember { mutableFloatStateOf(0.75f) }
     var selectedTimerSec by remember { mutableStateOf(3) }
-    var isFrontCamera by remember { mutableStateOf(true) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasCameraPermission = granted
-    }
 
     val currentPose = uiState.selectedPose
     val activeMode = uiState.cameraCoachMode
@@ -103,7 +92,7 @@ fun CameraCoachScreen(
             .background(ObsidianBlack)
             .testTag("camera_coach_screen")
     ) {
-        // Viewfinder Area (Simulated Camera Canvas with Rule of Thirds + Holographic Pose Wireframe)
+        // Guide-only preview: CameraX preview and photo capture are not implemented yet
         Box(modifier = Modifier.fillMaxSize()) {
             if (showWireframe) {
                 PoseWireframeCanvas(
@@ -114,7 +103,9 @@ fun CameraCoachScreen(
                 )
             }
 
-            // Hands-Free Countdown Overlay
+            Text(text = "Camera preview and photo capture are not connected yet", color = TextSecondary, fontSize = 12.sp, modifier = Modifier.align(Alignment.Center).padding(horizontal = 28.dp).background(DarkSurface.copy(alpha = 0.9f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 8.dp))
+
+            // Countdown overlay only; it does not take a photo.
             if (uiState.cameraTimerCountdown != null) {
                 Box(
                     modifier = Modifier
@@ -131,7 +122,7 @@ fun CameraCoachScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (uiState.cameraTimerCountdown > 0) "${uiState.cameraTimerCountdown}" else "SMILE! 📸",
+                            text = if (uiState.cameraTimerCountdown > 0) "${uiState.cameraTimerCountdown}" else "TIMER DONE",
                             fontSize = if (uiState.cameraTimerCountdown > 0) 54.sp else 24.sp,
                             fontWeight = FontWeight.Black,
                             color = Color.White
@@ -162,7 +153,7 @@ fun CameraCoachScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "AI CAMERA COACH",
+                        text = "POSE COACH PREVIEW",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = ElectricCyan,
@@ -201,20 +192,7 @@ fun CameraCoachScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = { isFrontCamera = !isFrontCamera },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(DarkSurface.copy(alpha = 0.8f))
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FlipCameraAndroid,
-                            contentDescription = "Flip",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    Text(text = "DEMO", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -347,9 +325,9 @@ fun CameraCoachScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Hands-Free Photo Capture Button
+                // Countdown only; no photo is captured
                 GradientButton(
-                    text = "Snap Photo (${selectedTimerSec}s)",
+                    text = "Start Timer (${selectedTimerSec}s)",
                     onClick = {
                         onStartTimer(selectedTimerSec)
                     },
