@@ -1,0 +1,6 @@
+{
+  "name": "PoseFlow AI",
+  "description": "AI-powered pose discovery, facial expression coach, and creative video editor for creators and photographers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
