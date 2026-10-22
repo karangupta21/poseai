@@ -570,7 +570,7 @@ fun VideoEditorScreen(
                             text = "Close",
                             onClick = onDismissExportMessage,
                             modifier = Modifier.fillMaxWidth(),
-                            icon = Icons.Default.Download
+                            icon = Icons.Default.Close
                         )
                     }
                 }
