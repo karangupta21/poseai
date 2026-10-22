@@ -309,9 +309,10 @@ class PoseFlowViewModel : ViewModel() {
     fun onExpressionPhotoSelected(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
+                val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                } ?: throw IllegalArgumentException("The selected image could not be opened.")
+                if (!bitmap.isRecycled) {
                     _uiState.update {
                         it.copy(
                             uploadedExpressionImage = bitmap,
@@ -331,6 +332,7 @@ class PoseFlowViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(isAnalyzingExpression = false) }
             }
         }
