@@ -535,13 +535,13 @@ fun VideoEditorScreen(
             }
         }
 
-        // Success dialog
+        // Export status dialog
         if (uiState.exportSuccessMessage != null) {
             Dialog(onDismissRequest = onDismissExportMessage) {
                 GlassCard(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     backgroundColor = DarkSurface,
-                    borderColor = EmeraldGlow
+                    borderColor = HotPink
                 ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
@@ -551,13 +551,13 @@ fun VideoEditorScreen(
                             modifier = Modifier
                                 .size(50.dp)
                                 .clip(CircleShape)
-                                .background(EmeraldGlow.copy(alpha = 0.2f)),
+                                .background(HotPink.copy(alpha = 0.2f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = EmeraldGlow, modifier = Modifier.size(28.dp))
+                            Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = HotPink, modifier = Modifier.size(28.dp))
                         }
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "EXPORT READY!", fontSize = 16.sp, fontWeight = FontWeight.Black, color = EmeraldGlow)
+                        Text(text = "EXPORT NOT AVAILABLE", fontSize = 16.sp, fontWeight = FontWeight.Black, color = HotPink)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = uiState.exportSuccessMessage ?: "",
@@ -567,10 +567,10 @@ fun VideoEditorScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         GradientButton(
-                            text = "Download MP4",
+                            text = "Close",
                             onClick = onDismissExportMessage,
                             modifier = Modifier.fillMaxWidth(),
-                            icon = Icons.Default.Download
+                            icon = Icons.Default.Close
                         )
                     }
                 }

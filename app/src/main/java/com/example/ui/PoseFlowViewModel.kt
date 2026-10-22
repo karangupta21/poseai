@@ -27,6 +27,7 @@ import com.example.data.repository.ExpressionRepository
 import com.example.data.repository.PoseRepository
 import com.example.data.repository.TemplateRepository
 import com.example.data.repository.VideoTemplate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +35,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.io.InputStream
 
 enum class AppTab(val title: String, val iconName: String) {
     HOME("Home", "Home"),
@@ -203,9 +203,10 @@ class PoseFlowViewModel : ViewModel() {
     fun onPosePhotoSelected(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
+                val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                } ?: throw IllegalArgumentException("The selected image could not be opened.")
+                if (!bitmap.isRecycled) {
                     _uiState.update {
                         it.copy(
                             uploadedPoseImage = bitmap,
@@ -225,6 +226,7 @@ class PoseFlowViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(isAnalyzingPose = false) }
             }
         }
@@ -307,9 +309,10 @@ class PoseFlowViewModel : ViewModel() {
     fun onExpressionPhotoSelected(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                if (bitmap != null) {
+                val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    BitmapFactory.decodeStream(stream)
+                } ?: throw IllegalArgumentException("The selected image could not be opened.")
+                if (!bitmap.isRecycled) {
                     _uiState.update {
                         it.copy(
                             uploadedExpressionImage = bitmap,
@@ -329,6 +332,7 @@ class PoseFlowViewModel : ViewModel() {
                     }
                 }
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 _uiState.update { it.copy(isAnalyzingExpression = false) }
             }
         }
@@ -387,17 +391,35 @@ class PoseFlowViewModel : ViewModel() {
     }
 
     fun startHandsFreeTimer(seconds: Int) {
+        val safeSeconds = seconds.coerceIn(1, 60)
         countdownJob?.cancel()
-        _uiState.update { it.copy(isHandsFreeTimerRunning = true, cameraTimerCountdown = seconds) }
-        countdownJob = viewModelScope.launch {
-            for (sec in seconds downTo 1) {
-                _uiState.update { it.copy(cameraTimerCountdown = sec) }
-                delay(1000)
-            }
-            _uiState.update { it.copy(isHandsFreeTimerRunning = false, cameraTimerCountdown = 0) }
-            delay(500)
-            _uiState.update { it.copy(cameraTimerCountdown = null) }
+        _uiState.update {
+            it.copy(isHandsFreeTimerRunning = false, cameraTimerCountdown = null)
         }
+        val job = viewModelScope.launch {
+            try {
+                for (sec in safeSeconds downTo 1) {
+                    _uiState.update {
+                        it.copy(isHandsFreeTimerRunning = true, cameraTimerCountdown = sec)
+                    }
+                    delay(1000)
+                }
+                // This is only a countdown. The current screen has no camera capture callback.
+                _uiState.update {
+                    it.copy(isHandsFreeTimerRunning = false, cameraTimerCountdown = 0)
+                }
+                delay(500)
+            } catch (e: CancellationException) {
+                throw e
+            } finally {
+                if (countdownJob === coroutineContext[Job]) {
+                    _uiState.update {
+                        it.copy(isHandsFreeTimerRunning = false, cameraTimerCountdown = null)
+                    }
+                }
+            }
+        }
+        countdownJob = job
     }
 
     fun setCameraWireframeAlpha(alpha: Float) {
@@ -672,35 +694,16 @@ class PoseFlowViewModel : ViewModel() {
     }
 
     fun exportVideo() {
-        viewModelScope.launch {
-            _uiState.update {
-                it.copy(
-                    videoEditState = it.videoEditState.copy(
-                        isProcessing = true,
-                        exportProgress = 0.1f
-                    )
-                )
-            }
-            delay(400)
-            _uiState.update {
-                it.copy(videoEditState = it.videoEditState.copy(exportProgress = 0.45f))
-            }
-            delay(500)
-            _uiState.update {
-                it.copy(videoEditState = it.videoEditState.copy(exportProgress = 0.85f))
-            }
-            delay(400)
-            val outPath = "/storage/emulated/0/Movies/PoseFlow_${System.currentTimeMillis()}.mp4"
-            _uiState.update {
-                it.copy(
-                    videoEditState = it.videoEditState.copy(
-                        isProcessing = false,
-                        exportProgress = 1.0f,
-                        exportedFilePath = outPath
-                    ),
-                    exportSuccessMessage = "Video rendered in ${it.videoEditState.exportResolution} (${it.videoEditState.aspectRatio.displayName}) with ${it.videoEditState.activeFilter.title} grade!"
-                )
-            }
+        // Do not report a fake MP4: rendering/muxing is not implemented in this editor yet.
+        _uiState.update {
+            it.copy(
+                videoEditState = it.videoEditState.copy(
+                    isProcessing = false,
+                    exportProgress = 0f,
+                    exportedFilePath = null
+                ),
+                exportSuccessMessage = "Video export is not implemented yet. Your edits are a preview; no MP4 file was created."
+            )
         }
     }
 

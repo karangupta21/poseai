@@ -10,6 +10,7 @@ import com.example.data.model.PoseReference
 import com.example.data.model.StoryboardPlan
 import com.example.data.model.StoryboardScene
 import com.example.data.repository.PoseRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -19,14 +20,15 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class GeminiService {
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
         .build()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -67,6 +69,7 @@ class GeminiService {
             val responseText = callGeminiMultimodal(prompt, base64Image)
             parsePoseAnalysisJson(responseText, userContext)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e("GeminiService", "Error calling Gemini pose analysis", e)
             PoseRepository.generateMockPoseAnalysis(userContext)
         }
@@ -101,6 +104,7 @@ class GeminiService {
             val responseText = callGeminiMultimodal(prompt, base64Image)
             parseExpressionAnalysisJson(responseText, targetMood)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e("GeminiService", "Error calling Gemini expression analysis", e)
             generateOfflineExpressionAnalysis(targetMood)
         }
@@ -176,6 +180,7 @@ class GeminiService {
             val responseText = callGeminiText(prompt)
             parseStoryboardJson(responseText, concept, platform, durationSeconds)
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e("GeminiService", "Error calling Gemini storyboard", e)
             generateOfflineStoryboard(concept, platform, durationSeconds)
         }
@@ -208,6 +213,8 @@ class GeminiService {
             }
             list
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Log.e("GeminiService", "Error generating video captions", e)
             listOf(
                 "⚡ Level up your creative flow",
                 "Golden hour hits different when the pose is locked",
@@ -219,7 +226,7 @@ class GeminiService {
 
     private fun callGeminiText(prompt: String): String {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
 
         val requestJson = JSONObject().apply {
             val contents = JSONArray().apply {
@@ -235,16 +242,21 @@ class GeminiService {
         }
 
         val requestBody = requestJson.toString().toRequestBody(jsonMediaType)
-        val request = Request.Builder().url(url).post(requestBody).build()
+        val request = Request.Builder().url(url).header("x-goog-api-key", apiKey).post(requestBody).build()
 
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw RuntimeException("Empty response")
-        return extractTextFromResponse(responseBody)
+        okHttpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string()
+                ?: throw IOException("Gemini returned an empty response body")
+            if (!response.isSuccessful) {
+                throw IOException("Gemini request failed with HTTP ${response.code}")
+            }
+            return extractTextFromResponse(responseBody)
+        }
     }
 
     private fun callGeminiMultimodal(prompt: String, base64Image: String): String {
         val apiKey = BuildConfig.GEMINI_API_KEY
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
 
         val requestJson = JSONObject().apply {
             val contents = JSONArray().apply {
@@ -266,11 +278,16 @@ class GeminiService {
         }
 
         val requestBody = requestJson.toString().toRequestBody(jsonMediaType)
-        val request = Request.Builder().url(url).post(requestBody).build()
+        val request = Request.Builder().url(url).header("x-goog-api-key", apiKey).post(requestBody).build()
 
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body?.string() ?: throw RuntimeException("Empty response")
-        return extractTextFromResponse(responseBody)
+        okHttpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string()
+                ?: throw IOException("Gemini returned an empty response body")
+            if (!response.isSuccessful) {
+                throw IOException("Gemini request failed with HTTP ${response.code}")
+            }
+            return extractTextFromResponse(responseBody)
+        }
     }
 
     private fun extractTextFromResponse(responseBody: String): String {
@@ -297,18 +314,24 @@ class GeminiService {
 
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val outputStream = ByteArrayOutputStream()
-        // Resize bitmap if too large to ensure quick upload
         val maxDim = 1024
         val scaled = if (bitmap.width > maxDim || bitmap.height > maxDim) {
             val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
-            val targetW = if (ratio >= 1) maxDim else (maxDim * ratio).toInt()
-            val targetH = if (ratio >= 1) (maxDim / ratio).toInt() else maxDim
+            val targetW = (if (ratio >= 1f) maxDim.toFloat() else maxDim * ratio).toInt().coerceAtLeast(1)
+            val targetH = (if (ratio >= 1f) maxDim / ratio else maxDim.toFloat()).toInt().coerceAtLeast(1)
             Bitmap.createScaledBitmap(bitmap, targetW, targetH, true)
         } else {
             bitmap
         }
-        scaled.compress(Bitmap.CompressFormat.JPEG, 82, outputStream)
-        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        try {
+            check(scaled.compress(Bitmap.CompressFormat.JPEG, 82, outputStream)) {
+                "Unable to encode image for Gemini"
+            }
+            return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+        } finally {
+            if (scaled !== bitmap && !scaled.isRecycled) scaled.recycle()
+            outputStream.close()
+        }
     }
 
     private fun parsePoseAnalysisJson(rawJsonText: String, context: String): PoseAnalysisResult {
